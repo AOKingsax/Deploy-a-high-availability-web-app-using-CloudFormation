@@ -1,5 +1,6 @@
 Description: >
   Okwesirieze Amadi project on provision servers and deploying a  high avaliblity web app
+
 Parameters:
   EnvironmentName:
     Description: An environment name that will prefixed to resource names
@@ -7,11 +8,74 @@ Parameters:
 
 Resources:
   S3Role:
- ath: "/"
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-Role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+
+  RolePolicies:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: "S3Accesspoint"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action: "*"
+            Resource: "*"
       Roles:
         - Ref: "S3Role"
 
-  LBS tcp
+  RoleInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: "S3Role"
+
+  LBSecGroup: #load balancer security group
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our load balancer
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress: # inbound rule
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress: # Outbound rule
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  WebServerSecGroup: # security group assigned to the servers
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our hosts and SSH from local only
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
           FromPort: 0
           ToPort: 65535
           CidrIp: 0.0.0.0/0
@@ -40,7 +104,34 @@ Resources:
             VolumeSize: "10" #10GB
 
   WebAppTargetGroup:
-    Type: AWSer
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${EnvironmentName}-VPCID"
+
+  WebAppGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${EnvironmentName}-PRIV-NETS"
+      LaunchConfigurationName:
+        Ref: WebAppLaunchConfig
+      MinSize: "2"
+      MaxSize: "5"
+      TargetGroupARNs:
+        - Ref: WebAppTargetGroup
+
+  WebAppLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Subnets:
         - Fn::ImportValue: !Sub "${EnvironmentName}-PUB1-SN"
@@ -74,97 +165,7 @@ Resources:
 
 Outputs:
   WebAppLoadBalancerDNSName:
-    Description: DNS name or PublicAllow http to our hosts and SSH from local only
-      VpcId:
-        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-      SecurityGroupEgress:
-        - IpProtocol:   Type: "AWS::IAM::Role"
-    Properties:
-      RoleName: !Sub ${EnvironmentName}-Role
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "ec2.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-
-  RolePolicies:
-    Type: "AWS::IAM::Policy"
-    Properties:
-      PolicyName: "S3Accesspoint"
-      PolicyDocument:
-        Versi         CidrIp: 0.0.0.0/0
-
-  WebServerSecGroup: # security group assigned to the servers
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: on: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Action: "*"
-            Resource: "*"
-      Roles:
-        - Ref: "S3Role"
-
-  RoleInstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
-    Properties:
-      P::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 10
-      HealthCheckPath: /
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 8
-      HealthyThresholdCount: 2
-      Port: 80
-      Protocol: HTTP
-      UnhealthyThresholdCount: 5
-      VpcId:
-        Fn::ImportValue:
-          Fn::Sub: "${EnvironmentName}-VPCID"
-
-  WebAppGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      r
-      VpcId:
-        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
-      SecurityGroupIngress: # inbound rule
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-      SecurityGroupEgress: # Outbound rule
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
- VPCZoneIdentifier:
-        - Fn::ImportValue: !Sub "${EnvironmentName}-PRIV-NETS"
-      LaunchConfigurationName:
-        Ref: WebAppLaunchConfig
-      MinSize: "2"
-      MaxSize: "5"
-      TargetGroupARNs:
-        - Ref: WebAppTargetGroup
-
-  WebAppLB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalanc URL of the Load Balancer
+    Description: DNS name or Public URL of the Load Balancer
     Value: !Join ["", ["http://", !GetAtt WebAppLB.DNSName]]
     Export:
-      Name: !Sub ${EnvironmentName}-LB-DNSNameecGroup: #load balancer security group
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow http to our load balance
+      Name: !Sub ${EnvironmentName}-LB-DNSName
